@@ -8,7 +8,7 @@
 #include <glm/glm.hpp>
 
 #include "Monster.h"
-#include "StudioRenderer.h"
+#include "GoldSrcModel.h"
 
 void Monster::update(float dt)
 {

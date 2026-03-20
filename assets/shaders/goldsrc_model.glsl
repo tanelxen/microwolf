@@ -7,7 +7,7 @@ layout (location = 3) in uint boneIndex;
 
 uniform mat4 uBoneTransforms[128];
 uniform mat4 uModel;
-uniform mat4 uMVP;
+uniform mat4 MVP;
 
 out vec2 uv;
 out vec3 transformedNormal;
@@ -17,7 +17,7 @@ void main()
 {
     transformedPosition = uBoneTransforms[boneIndex] * position;
     transformedNormal = normalize(mat3(uModel) * mat3(uBoneTransforms[boneIndex]) * normal);
-    gl_Position = uMVP * transformedPosition;
+    gl_Position = MVP * transformedPosition;
     uv = texCoord;
 }
 

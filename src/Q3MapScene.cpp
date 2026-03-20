@@ -17,7 +17,7 @@
 
 #include "miniaudio.h"
 
-#include "StudioRenderer.h"
+#include "GoldSrcModel.h"
 #include "Q3LightGrid.h"
 
 #include "Monster.h"
@@ -26,6 +26,8 @@
 
 #include "DebugRenderer.h"
 #include "Cube.h"
+
+#include "RenderDevice.h"
 
 //#include "Q3Shaders.h"
 
@@ -59,12 +61,18 @@ struct SoundEntity
 
 static std::vector<SoundEntity> g_ambients;
 
+std::unordered_map<std::string, GoldSrcModel> studio_cache;
+static Shader studio_shader;
+
+std::unique_ptr<GoldSrcModelInstance> makeModelInstance(const std::string& filename);
+
 Q3MapScene::Q3MapScene(Camera *camera) : m_pCamera(camera)
 {
-    studio = std::make_unique<StudioRenderer>();
     m_pLightGrid = std::make_unique<Q3LightGrid>();
     
 //    s_q3shaders.initFromDir("assets/wolf/scripts/");
+    
+    studio_shader.init("assets/shaders/goldsrc_model.glsl");
     
     ma_engine_init(NULL, &g_engine);
     
@@ -140,7 +148,7 @@ void Q3MapScene::loadMap(const std::string &filename)
         
         if (i == 0)
         {
-            m_pPlayer->m_pModelInstance = studio->makeModelInstance("assets/models/v_9mmhandgun.mdl");
+            m_pPlayer->m_pModelInstance = makeModelInstance("assets/models/v_9mmhandgun.mdl");
             m_pPlayer->position = position + glm::vec3{0, 0, 0.25};
             m_pPlayer->yaw = yaw;
             m_pPlayer->pitch = 0;
@@ -150,7 +158,7 @@ void Q3MapScene::loadMap(const std::string &filename)
         else
         {
             auto& monster = m_monsters.emplace_back();
-            monster.m_pModelInstance = studio->makeModelInstance("assets/models/barney.mdl");
+            monster.m_pModelInstance = makeModelInstance("assets/models/barney.mdl");
             monster.position = position;
             monster.yaw = yaw;
             
@@ -236,14 +244,11 @@ void Q3MapScene::loadMap(const std::string &filename)
 //    }
 }
 
-bool intersection(const glm::vec3& start, const glm::vec3& end, const glm::vec3& mins, const glm::vec3& maxs, glm::vec3& point);
-
 void Q3MapScene::update(float dt)
 {
     if (m_pCamera == nullptr) return;
     
     m_pPlayer->update(dt);
-    studio->queueViewModel(m_pPlayer->m_pModelInstance.get());
     
     glm::vec3 camera_pos = m_pPlayer->position;
     camera_pos.z += 40;
@@ -263,34 +268,19 @@ void Q3MapScene::update(float dt)
     for (auto& monster : m_monsters)
     {
         monster.update(dt);
-        studio->queue(monster.m_pModelInstance.get());
-    }
-    
-    for (int i = 0; i < m_monsters.size(); ++i)
-    {
-        if (Input::isKeyPressed(48 + i))
-        {
-            auto& monster = m_monsters[i];
-    
-            glm::vec3 dirToPlayer = glm::normalize(m_pPlayer->position - monster.position);
-            monster.yaw = atan2(dirToPlayer.y, dirToPlayer.x);
-        }
     }
     
     if (Input::isLeftMouseButtonClicked())
     {
-//        ma_sound_start(&g_sound1);
-        
-        glm::vec3 start = m_pPlayer->position;
+        glm::vec3 start = m_pPlayer->position + glm::vec3{0, 0, 40};
         glm::vec3 end = start + m_pCamera->getForward() * 2048.0f;
         
         DebugRenderer::getInstance().addLine(start, end, glm::vec3(1), 10.0f);
         
         if (auto hitted = traceEntities(start, end))
         {
-//            auto pos = hitted->position;
-//            ma_sound_set_position(&g_sound2, pos.x, pos.y, pos.z);
-//            ma_sound_start(&g_sound2);
+            glm::vec3 dirToPlayer = glm::normalize(m_pPlayer->position - hitted->position);
+            hitted->yaw = atan2(dirToPlayer.y, dirToPlayer.x);
         }
     }
     
@@ -319,55 +309,86 @@ void Q3MapScene::update(float dt)
     }
 }
 
+void drawModels(GoldSrcModelInstance* inst, const Q3LightGrid* lightGrid)
+{
+    glm::mat4 model = glm::mat4(1);
+    model = glm::translate(model, inst->position);
+    model = glm::rotate(model, inst->yaw, glm::vec3(0, 0, 1));
+    model = glm::rotate(model, inst->pitch, glm::vec3(0, 1, 0));
+    
+    if (inst->hasParent)
+    {
+        glm::mat4 parent = glm::mat4(1);
+        parent = glm::translate(parent, inst->parent_position);
+        parent = glm::rotate(parent, inst->parent_yaw, glm::vec3(0, 0, 1));
+        parent = glm::rotate(parent, inst->parent_pitch, glm::vec3(0, 1, 0));
+        
+        model = parent * model;
+    }
+    
+    glm::vec3 ambient = glm::vec3{1};
+    glm::vec3 color = glm::vec3{1};
+    glm::vec3 dir = glm::vec3{0};
+    
+    if (lightGrid != nullptr)
+    {
+        glm::vec3 pos = inst->parent_position + inst->position;
+        
+        if (inst->hasParent == false) {
+            pos.z += 24;
+        }
+        
+        lightGrid->getValue(pos, ambient, color, dir);
+    }
+    
+    for (auto& surface : inst->m_pmodel->mesh.surfaces)
+    {
+        RenderCommand cmd;
+        cmd.vao = inst->m_pmodel->mesh.vao;
+        cmd.ibo = inst->m_pmodel->mesh.ibo;
+        cmd.bufferOffset = surface.bufferOffset;
+        cmd.count = surface.indicesCount;
+        
+        cmd.shader = &studio_shader;
+        cmd.baseTexture = inst->m_pmodel->mesh.textures[surface.tex];
+        
+        cmd.transform = model;
+        
+        cmd.lightProbe = { .ambient = ambient, .color = color, .dir = dir };
+        cmd.useLightProbe = true;
+        
+        cmd.bones = &(inst->animator.transforms);
+        cmd.useSkinning = true;
+        
+        cmd.passFlags = MainPass;
+        
+        RenderDevice::submit(cmd);
+    }
+}
+
 void Q3MapScene::draw()
 {
     if (m_pCamera == nullptr) return;
     
-    glEnable(GL_DEPTH_TEST);
-    
-    glClearColor(0.1, 0.1, 0.1, 1);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    glm::mat4x4 mvp = m_pCamera->projection * m_pCamera->view;
-    m_mesh.renderFaces(mvp);
-    
-    studio->drawRegular(m_pCamera, m_pLightGrid.get());
-    
-    glm::vec3 mins = glm::vec3{-15, -15, -24};
-    glm::vec3 maxs = glm::vec3{ 15,  15,  48};
+    m_mesh.renderFaces();
     
     for (auto& monster : m_monsters)
     {
-        glm::vec3 absmins = monster.position + mins;
-        glm::vec3 absmaxs = monster.position + maxs;
-        
-        cube.position = (absmins + absmaxs) * 0.5f;
-        cube.scale = absmaxs - absmins;
-        cube.color = {1, 1, 1, 1};
-        
-        cube.draw(*m_pCamera);
+        drawModels(monster.m_pModelInstance.get(), m_pLightGrid.get());
     }
     
-    DebugRenderer::getInstance().draw(*m_pCamera);
+    drawModels(m_pPlayer->m_pModelInstance.get(), m_pLightGrid.get());
     
-    glClear(GL_DEPTH_BUFFER_BIT);
+    RenderDevice::commit(m_pCamera);
     
-    studio->drawViewModels(m_pCamera, m_pLightGrid.get());
-    
-//    for (auto& entity : g_ambients)
-//    {
-//        if (!entity.isVisible) continue;
-//        
-//        cube.position = entity.origin;
-//        cube.scale = {8, 8, 8};
-//        cube.color = {1, 0, 0, 1};
-//        
-//        cube.draw(*m_pCamera);
-//    }
+    glm::mat4x4 viewProj = m_pCamera->projection * m_pCamera->view;
+    DebugRenderer::getInstance().draw(viewProj);
 }
 
 #define GLM_ENABLE_EXPERIMENTAL 1
 #include <glm/gtx/norm.hpp>
+
+bool intersection(const glm::vec3& start, const glm::vec3& end, const glm::vec3& mins, const glm::vec3& maxs, glm::vec3& point);
 
 Monster* Q3MapScene::traceEntities(const glm::vec3 &start, const glm::vec3 &end)
 {
@@ -428,4 +449,38 @@ bool intersection(const glm::vec3& start, const glm::vec3& end, const glm::vec3&
     }
     
     return false;
+}
+
+
+GoldSrcModel* makeModel(const std::string& filename)
+{
+    auto [it, inserted] = studio_cache.try_emplace(filename);
+    
+    GoldSrcModel& model = it->second;
+    
+    if (inserted)
+    {
+        GoldSrc::Model asset;
+        asset.loadFromFile(filename);
+        
+        model.mesh.init(asset);
+        model.animation.sequences = asset.sequences;
+        model.animation.bones = asset.bones;
+    }
+    else
+    {
+        printf("Use cached model for %s\n", filename.c_str());
+    }
+    
+    return &model;
+}
+
+std::unique_ptr<GoldSrcModelInstance> makeModelInstance(const std::string& filename)
+{
+    auto inst = std::make_unique<GoldSrcModelInstance>();
+    
+    inst->m_pmodel = makeModel(filename);
+    inst->animator.m_pAnimation = &(inst->m_pmodel->animation);
+    
+    return inst;
 }

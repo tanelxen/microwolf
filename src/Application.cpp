@@ -22,6 +22,8 @@
 #include "Input.h"
 #include "HUD.h"
 
+#include "RenderDevice.h"
+
 #include "Application.h"
 
 static bool isInMenu = true;
@@ -73,13 +75,7 @@ Application::Application()
 
     glfwMakeContextCurrent(m_pWindow);
 
-    gladLoadGL();
-
-    const unsigned char* version = glGetString(GL_VERSION);
-    printf("version: %s\n", version);
-    
-    const unsigned char* device = glGetString(GL_RENDERER);
-    printf("device: %s\n", device);
+    RenderDevice::init();
     
     imgui_init(m_pWindow);
     
@@ -87,7 +83,6 @@ Application::Application()
     m_pScene = new Q3MapScene(m_pCamera);
     
     glfwSwapInterval(0);
-    glFrontFace(GL_CCW);
     
     currentInstance = this;
     
@@ -109,11 +104,7 @@ void Application::run()
     hud.init();
     
     double lastTime = 0;
-    const double desiredFrameTime = 1.0 / 60;
-    
-//    glfwSetInputMode(m_pWindow, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-    
-    glEnable(GL_FRAMEBUFFER_SRGB);
+    const double desiredFrameTime = 1.0 / 62;
     
     while (!glfwWindowShouldClose(m_pWindow))
     {

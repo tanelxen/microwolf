@@ -9,10 +9,11 @@
 
 #include "Player.h"
 #include "PlayerMovement.h"
-#include "StudioRenderer.h"
 
 #include "Input.h"
 #include "Application.h"
+
+#include "GoldSrcModel.h"
 
 static const float kMouseSense = 0.15;
 
@@ -76,6 +77,14 @@ void Player::update(float dt)
     m_pMovement->update(dt);
     
     position = m_pMovement->getPosition();
+    
+    m_pModelInstance->parent_position = position;
+    m_pModelInstance->parent_yaw = yaw;
+    m_pModelInstance->hasParent = true;
+    
+    m_pModelInstance->position = glm::vec3(-0.5, 0, 40);
+    m_pModelInstance->yaw = 0;
+    m_pModelInstance->pitch = pitch;
     
     m_pModelInstance->animator.update(dt);
     

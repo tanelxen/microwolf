@@ -32,7 +32,7 @@ struct DebugRenderer
     void addBBox(glm::vec3 mins, glm::vec3 maxs, glm::vec3 color);
     
     void update(float dt);
-    void draw(const class Camera& camera);
+    void draw(glm::mat4& mvp);
     
     static DebugRenderer& getInstance()
     {

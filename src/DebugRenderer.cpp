@@ -5,11 +5,11 @@
 //  Created by Fedor Artemenkov on 02.12.24.
 //
 
+#include "DebugRenderer.h"
+
 #include <glad/glad.h>
-#include "Camera.h"
 #include "Shader.h"
 
-#include "DebugRenderer.h"
 
 static unsigned int vbo;
 static unsigned int vao;
@@ -67,11 +67,9 @@ void DebugRenderer::update(float dt)
     isDirty |= erasedCount > 0;
 }
 
-void DebugRenderer::draw(const Camera& camera)
+void DebugRenderer::draw(glm::mat4& mvp)
 {
     if (m_lines.empty()) return;
-    
-    glm::mat4x4 mvp = camera.projection * camera.view;
     
     shader.bind();
     shader.setUniform("MVP", mvp);

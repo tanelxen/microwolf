@@ -13,7 +13,6 @@ Features:
 - ✅ 3d-sound via miniaudio
 
 ## TODO
-- [ ] rendering system refactoring
 - [ ] support original .mds skeletal meshes
 - [ ] aas navigation system
 - [ ] read assets in .pk3 files

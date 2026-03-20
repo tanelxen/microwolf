@@ -48,6 +48,9 @@ set(SRC_COMMON
         src/DebugRenderer.h
         src/Cube.cpp
         src/Cube.h
+        
+        src/RenderDevice.cpp
+        src/RenderDevice.h
 )
 
 set(SRC_Q3
@@ -73,8 +76,6 @@ set(SRC_GLDSRC
         src/GoldSrcMDLAsset.h
         src/GoldSrcModel.cpp
         src/GoldSrcModel.h
-        src/StudioRenderer.cpp
-        src/StudioRenderer.h
 )
 
 set(SRC_MINIAUDIO

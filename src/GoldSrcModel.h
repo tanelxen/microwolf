@@ -14,13 +14,12 @@
 struct GoldSrcMesh
 {
     void init(const GoldSrc::Model& model);
-    void draw();
     
 private:
     void uploadTextures(const std::vector<GoldSrc::Texture>& textures);
     void uploadMeshes(const std::vector<GoldSrc::Mesh>& meshes);
     
-private:
+public:
     unsigned int vbo;
     unsigned int ibo;
     unsigned int vao;
@@ -61,7 +60,7 @@ struct GoldSrcAnimator
     
     void update(float dt);
     
-private:
+//private:
     float cur_frame = 0;
     float cur_frame_time = 0;
     float cur_anim_duration = 0;
@@ -83,11 +82,18 @@ struct GoldSrcModelInstance
 {
     GoldSrcAnimator animator;
     
-    glm::vec3 position;
-    float yaw;
+    glm::vec3 parent_position = glm::vec3(0);
+    float parent_yaw = 0;
+    float parent_pitch = 0;
+    bool hasParent = false;
     
-private:
+    glm::vec3 position;
+    float yaw = 0;
+    float pitch = 0;
+    
+//private:
     // Only StudioRenderer has access to GoldSrcModel
-    friend struct StudioRenderer;
+//    friend struct StudioRenderer;
+    
     GoldSrcModel* m_pmodel = nullptr;
 };

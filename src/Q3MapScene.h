@@ -45,7 +45,6 @@ private:
     Q3BspMesh m_mesh;
     Q3BspCollision m_collision;
     
-    std::unique_ptr<StudioRenderer> studio;
     std::unique_ptr<Q3LightGrid> m_pLightGrid;
     
     Monster* traceEntities(const glm::vec3 &start, const glm::vec3 &end);

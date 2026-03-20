@@ -25,7 +25,7 @@ class Q3BspMesh
 {
 public:
     void initFromBsp(Q3BSPAsset* bsp);
-    void renderFaces(glm::mat4x4& mvp);
+    void renderFaces();
     
 private:
     void initBuffers();
