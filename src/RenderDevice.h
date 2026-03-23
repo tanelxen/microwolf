@@ -26,7 +26,7 @@ namespace RenderDevice {
     handle_t makeVertexBuffer(long size, void* data);
     handle_t makeIndexBuffer(long size, void* data);
     
-    handle_t makeVertexArray(handle_t vertexBuffer, const VertexLayout& layout);
+    handle_t makeVertexArray(handle_t vertexBuffer, handle_t indexBuffer, const VertexLayout& layout);
     
     void submit(RenderCommand cmd);
     void commit(Camera* camera);

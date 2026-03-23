@@ -18,7 +18,8 @@
 
 namespace RenderDevice {
     
-    std::vector<RenderCommand> mainPass;
+    std::vector<RenderCommand> opaquePass;
+    std::vector<RenderCommand> transparentPass;
     
     void init()
     {
@@ -87,13 +88,16 @@ namespace RenderDevice {
         return id;
     }
     
-    handle_t makeVertexArray(handle_t vertexBuffer, const VertexLayout& layout)
+    handle_t makeVertexArray(handle_t vertexBuffer, handle_t indexBuffer, const VertexLayout& layout)
     {
         glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
         
         GLuint id;
         glGenVertexArrays(1, &id);
         glBindVertexArray(id);
+        
+        glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
         
         for (int i = 0; i < layout.attributes.size(); i++)
         {
@@ -103,16 +107,23 @@ namespace RenderDevice {
             glVertexAttribPointer(i, attribute.count, attribute.type, attribute.normalized, layout.stride, (void*)attribute.offset);
         }
         
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
+        
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
         
         return id;
     }
     
     void submit(RenderCommand cmd)
     {
-        if (cmd.passFlags & MainPass) {
-            mainPass.push_back(cmd);
+        if (cmd.isOpaque)
+        {
+            opaquePass.push_back(cmd);
+        }
+        else
+        {
+            transparentPass.push_back(cmd);
         }
     }
     
@@ -144,7 +155,7 @@ namespace RenderDevice {
                 
                 glDisable(GL_POLYGON_OFFSET_FILL);
                 
-                glDepthMask(GL_TRUE);
+//                glDepthMask(GL_TRUE);
             }
             else
             {
@@ -158,7 +169,7 @@ namespace RenderDevice {
                 float factor = cmd.lightmapTexture == 0 ? -16 : -8;
                 glPolygonOffset(factor, 1);
                 
-                glDepthMask(GL_FALSE);
+//                glDepthMask(GL_FALSE);
             }
             
             if (lastBaseTexture != cmd.baseTexture)
@@ -177,18 +188,6 @@ namespace RenderDevice {
                 lastLightmapTexture = cmd.lightmapTexture;
             }
             
-            if (lastVAO != cmd.vao)
-            {
-                glBindVertexArray(cmd.vao);
-                lastVAO = cmd.vao;
-            }
-            
-            if (lastIBO != cmd.ibo)
-            {
-                glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cmd.ibo);
-                lastIBO = cmd.ibo;
-            }
-            
             if (cmd.useLightProbe)
             {
                 cmd.shader->setUniform("u_ambient", cmd.lightProbe.ambient);
@@ -204,35 +203,36 @@ namespace RenderDevice {
                 cmd.shader->setUniform("uBoneTransforms", *cmd.bones);
             }
             
+            if (lastVAO != cmd.vao)
+            {
+                glBindVertexArray(cmd.vao);
+                lastVAO = cmd.vao;
+            }
+            
             glDrawElements(GL_TRIANGLES, cmd.count, GL_UNSIGNED_INT, (void *)cmd.bufferOffset);
         }
         
-        glDisable(GL_BLEND);
-        glDisable(GL_POLYGON_OFFSET_FILL);
+//        glDisable(GL_BLEND);
+//        glDisable(GL_POLYGON_OFFSET_FILL);
     }
     
     void commit(Camera* camera)
     {
         if (camera == nullptr) return;
         
-        // Main Pass
-        {
-            glEnable(GL_DEPTH_TEST);
-            
-            glClearColor(0.1, 0.1, 0.1, 1);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-            
-            glm::mat4x4 viewProj = camera->projection * camera->view;
-            draw(viewProj, mainPass);
-            mainPass.clear();
-        }
+        glEnable(GL_DEPTH_TEST);
         
-//        {
-//            glClear(GL_DEPTH_BUFFER_BIT);
-//            
-//            glm::mat4x4 viewProj = camera->projection * camera->view;
-//            draw(viewProj, mainPass);
-//            mainPass.clear();
-//        }
+        glClearColor(0.1, 0.1, 0.1, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        glm::mat4x4 viewProj = camera->projection * camera->view;
+        
+//        glDepthMask(GL_TRUE);
+        draw(viewProj, opaquePass);
+        opaquePass.clear();
+        
+//        glDepthMask(GL_FALSE);
+        draw(viewProj, transparentPass);
+        transparentPass.clear();
     }
 }

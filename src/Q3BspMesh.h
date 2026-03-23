@@ -19,6 +19,12 @@ struct Surface
     unsigned int numVerts;
 };
 
+struct Material
+{
+    unsigned int baseTextureId;
+    bool isTransparent;
+};
+
 class Q3BSPAsset;
 
 class Q3BspMesh
@@ -38,7 +44,7 @@ private:
     unsigned int vbo;
     unsigned int ibo;
     
-    unsigned int m_textures[MAX_TEXTURES];
+    Material m_textures[MAX_TEXTURES];
     unsigned int m_lightmap;
 
     unsigned int missing_id;

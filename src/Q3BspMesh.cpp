@@ -16,6 +16,7 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <filesystem>
 
 #include "Q3BspMesh.h"
 #include "Q3BSPAsset.h"
@@ -23,6 +24,8 @@
 #include "Shader.h"
 #include "TextureAtlas.h"
 #include "RenderDevice.h"
+
+#include "Q3Shaders.h"
 
 #define FACE_POLYGON 1
 #define FACE_PATCH 2
@@ -35,7 +38,7 @@ static Shader vl_shader;
 
 static void adjastLightmapCoords(Q3BSPAsset* bsp, const TextureAtlas& atlas);
 
-static bool textures_alpha[MAX_TEXTURES];
+static Quake3Shaders s_q3shaders;
 
 void Q3BspMesh::initFromBsp(Q3BSPAsset* bsp)
 {
@@ -47,6 +50,8 @@ void Q3BspMesh::initFromBsp(Q3BSPAsset* bsp)
     
     adjastLightmapCoords(bsp, atlas);
     m_lightmap = RenderDevice::makeTexture(atlas.width, atlas.height, false, false, atlas.buffer);
+    
+    s_q3shaders.initFromDir("assets/wolf/scripts/");
     
     GenerateTexture();
     initBuffers();
@@ -85,6 +90,35 @@ void adjastLightmapCoords(Q3BSPAsset* bsp, const TextureAtlas& atlas)
     }
 }
 
+struct Image
+{
+    int width, height;
+    int num_channels;
+    void* data;
+};
+
+Image loadImage(std::string& map)
+{
+    Image image;
+    
+    std::filesystem::path folder("assets/wolf");
+    std::filesystem::path path = folder / std::filesystem::path(map);
+    
+    image.data = stbi_load(path.replace_extension("jpg").c_str(), &image.width, &image.height, &image.num_channels, 3);
+    
+    if (image.data == nullptr)
+    {
+        image.data = stbi_load(path.replace_extension("tga").c_str(), &image.width, &image.height, &image.num_channels, 4);
+    }
+    
+    if (image.data == nullptr)
+    {
+        std::cout << "Can't find: " << path << std::endl;
+    }
+    
+    return image;
+}
+
 void Q3BspMesh::GenerateTexture()
 {
     int width, height;
@@ -96,34 +130,24 @@ void Q3BspMesh::GenerateTexture()
 
     for (int i = 0; i < g_bsp->m_textures.size(); i++)
     {
-        std::string path = "assets/wolf/";
-        path.append(g_bsp->m_textures[i].strName);
-        
-        unsigned char* image = nullptr;
-        
-        std::string jpgPath = path + ".jpg";
-        image = stbi_load(jpgPath.c_str(), &width, &height, &num_channels, 3);
-        
-        if (image == nullptr)
-        {
-            std::string tgaPath = path + ".tga";
-            image = stbi_load(tgaPath.c_str(), &width, &height, &num_channels, 4);
-        }
+        m_textures[i].baseTextureId = missing_id;
 
-        if (image)
+        std::string mapParam = g_bsp->m_textures[i].strName;
+        bool transparent = false;
+        
+        s_q3shaders.getBaseTextureName(g_bsp->m_textures[i].strName, mapParam, transparent);
+        
+        Image image = loadImage(mapParam);
+        
+        if (image.data)
         {
-            bool hasAlpha = num_channels == 4;
-
-            m_textures[i] = RenderDevice::makeTexture(width, height, hasAlpha, true, image);
-            textures_alpha[i] = hasAlpha;
-        }
-        else
-        {
-            std::cout << "Can't find: " << path << std::endl;
-            m_textures[i] = missing_id;
+            bool hasAlpha = image.num_channels == 4;
+            
+            m_textures[i].baseTextureId = RenderDevice::makeTexture(image.width, image.height, hasAlpha, true, image.data);
+            m_textures[i].isTransparent = transparent;
         }
         
-        stbi_image_free(image);
+        stbi_image_free(image.data);
     }
 }
 
@@ -142,7 +166,7 @@ void Q3BspMesh::initBuffers()
     layout.add<float>(3);
     layout.add<byte>(4);
     
-    vao = RenderDevice::makeVertexArray(vbo, layout);
+    vao = RenderDevice::makeVertexArray(vbo, ibo, layout);
     
     lm_shader.init("assets/shaders/q3bsp_lightmapped.glsl");
     lm_shader.bind();
@@ -256,10 +280,10 @@ void Q3BspMesh::makeLightmappedIndices()
     for (auto pair : indicesByTexture)
     {
         int texture = pair.first;
-        auto& array = textures_alpha[texture] ? lm_surfaces_alpha : lm_surfaces_opaque;
+        auto& array = m_textures[texture].isTransparent ? lm_surfaces_alpha : lm_surfaces_opaque;
         
         auto& surface = array.emplace_back();
-        surface.texId = m_textures[texture];
+        surface.texId = m_textures[texture].baseTextureId;
         surface.bufferOffset = (uint32_t)(indices.size() * sizeof(uint32_t));
         surface.numVerts = (uint32_t)pair.second.size();
         
@@ -303,10 +327,10 @@ void Q3BspMesh::makeVertexlitIndices()
 //            continue;
 //        }
         
-        auto& array = textures_alpha[texture] ? vl_surfaces_alpha : vl_surfaces_opaque;
+        auto& array = m_textures[texture].isTransparent ? vl_surfaces_alpha : vl_surfaces_opaque;
         
         auto& surface = array.emplace_back();
-        surface.texId = m_textures[texture];
+        surface.texId = m_textures[texture].baseTextureId;
         surface.bufferOffset = (uint32_t)(indices.size() * sizeof(uint32_t));
         surface.numVerts = (uint32_t)pair.second.size();
         

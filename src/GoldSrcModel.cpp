@@ -61,7 +61,7 @@ void GoldSrcMesh::uploadMeshes(const std::vector<GoldSrc::Mesh> &meshes)
     layout.add<float>(2);
     layout.add<unsigned int>(1);
     
-    vao = RenderDevice::makeVertexArray(vbo, layout);
+    vao = RenderDevice::makeVertexArray(vbo, ibo, layout);
 }
 
 

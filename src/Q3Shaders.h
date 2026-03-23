@@ -14,6 +14,31 @@
 struct Q3ShaderStage
 {
     std::unordered_map<std::string, std::string> parameters;
+    
+    bool getMap(std::string& map)
+    {
+        {
+            auto it = parameters.find("map");
+            
+            if (it != parameters.end())
+            {
+                map = it->second;
+                return true;
+            }
+        }
+        
+        {
+            auto it = parameters.find("animMap");
+            
+            if (it != parameters.end())
+            {
+                map = it->second;
+                return true;
+            }
+        }
+        
+        return false;
+    }
 };
 
 struct Q3ShaderItem
@@ -28,7 +53,7 @@ class Quake3Shaders
 public:
     void initFromDir(const std::string& dir);
     
-    bool getBaseTextureName(std::string& textureName, const std::string& shaderName) const;
+    bool getBaseTextureName(const std::string& shaderName, std::string& textureName, bool& transparent) const;
     
 private:
     void readFile(const std::string& filename);

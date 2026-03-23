@@ -29,8 +29,6 @@
 
 #include "RenderDevice.h"
 
-//#include "Q3Shaders.h"
-
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
@@ -44,7 +42,7 @@ static WiredCube cube;
 
 tBSPVisData m_clusters;
 
-//static Quake3Shaders s_q3shaders;
+
 
 struct SoundEntity
 {
@@ -69,8 +67,6 @@ std::unique_ptr<GoldSrcModelInstance> makeModelInstance(const std::string& filen
 Q3MapScene::Q3MapScene(Camera *camera) : m_pCamera(camera)
 {
     m_pLightGrid = std::make_unique<Q3LightGrid>();
-    
-//    s_q3shaders.initFromDir("assets/wolf/scripts/");
     
     studio_shader.init("assets/shaders/goldsrc_model.glsl");
     
@@ -232,16 +228,6 @@ void Q3MapScene::loadMap(const std::string &filename)
     m_pLightGrid->init(bsp);
     
     m_clusters = bsp.m_clusters;
-    
-//    for (auto& texture : bsp.m_textures)
-//    {
-//        auto it = s_q3shaders.entries.find(texture.strName);
-//        
-//        if (it != s_q3shaders.entries.end())
-//        {
-//            printf("Use shader for: %s\n", texture.strName);
-//        }
-//    }
 }
 
 void Q3MapScene::update(float dt)

@@ -54,13 +54,13 @@ void Quake3Shaders::readFile(const std::string& filename)
     }
 }
 
-bool Quake3Shaders::getBaseTextureName(std::string& textureName, const std::string& shaderName) const
+bool Quake3Shaders::getBaseTextureName(const std::string& shaderName, std::string& textureName, bool& transparent) const
 {
     auto it = entries.find(shaderName);
     
     if (it == entries.end()) 
     {
-        std::cerr << "Нет шейдера " << shaderName << std::endl;
+//        std::cerr << "Нет шейдера " << shaderName << std::endl;
         return false;
     }
     
@@ -76,6 +76,22 @@ bool Quake3Shaders::getBaseTextureName(std::string& textureName, const std::stri
         if (it->second == "$lightmap") continue;
         
         textureName = it->second;
+        
+        auto it2 = stage.parameters.find("blendFunc");
+        if (it2 != stage.parameters.end())
+        {
+            bool multiply = it2->second == "GL_SRC_ALPHA GL_ONE";
+            bool add = it2->second == "GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA";
+            
+            transparent = multiply || add;
+        }
+        
+        auto it3 = stage.parameters.find("alphaFunc");
+        if (it3 != stage.parameters.end())
+        {
+            transparent |= it3->second == "GE128";
+        }
+        
         success = true;
         break;
     }
