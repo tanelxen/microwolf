@@ -60,15 +60,12 @@ struct SoundEntity
 static std::vector<SoundEntity> g_ambients;
 
 std::unordered_map<std::string, GoldSrcModel> studio_cache;
-static Shader studio_shader;
 
 std::unique_ptr<GoldSrcModelInstance> makeModelInstance(const std::string& filename);
 
 Q3MapScene::Q3MapScene(Camera *camera) : m_pCamera(camera)
 {
     m_pLightGrid = std::make_unique<Q3LightGrid>();
-    
-    studio_shader.init("assets/shaders/goldsrc_model.glsl");
     
     ma_engine_init(NULL, &g_engine);
     
@@ -335,16 +332,14 @@ void drawModels(GoldSrcModelInstance* inst, const Q3LightGrid* lightGrid)
         cmd.bufferOffset = surface.bufferOffset;
         cmd.count = surface.indicesCount;
         
-        cmd.shader = &studio_shader;
+        cmd.pipeline = PipelineType::Skinned;
         cmd.baseTexture = inst->m_pmodel->mesh.textures[surface.tex];
         
         cmd.transform = model;
         
         cmd.lightProbe = { .ambient = ambient, .color = color, .dir = dir };
-        cmd.useLightProbe = true;
         
         cmd.bones = &(inst->animator.transforms);
-        cmd.useSkinning = true;
         
         cmd.passFlags = MainPass;
         

@@ -28,6 +28,9 @@ public:
 
     void bind() const;
     void unbind() const;
+    
+    void setUniform(const std::string& name, bool value) const;
+    void setUniform(const std::string& name, float value) const;
 
     void setUniform(const std::string& name, const glm::vec3& vector) const;
     void setUniform(const std::string& name, const glm::vec4& vector) const;

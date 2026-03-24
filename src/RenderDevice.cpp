@@ -21,6 +21,9 @@ namespace RenderDevice {
     std::vector<RenderCommand> opaquePass;
     std::vector<RenderCommand> transparentPass;
     
+    static Shader q3bsp_shader;
+    static Shader studio_shader;
+    
     void init()
     {
         gladLoadGL();
@@ -33,6 +36,14 @@ namespace RenderDevice {
         
         glEnable(GL_FRAMEBUFFER_SRGB);
         glFrontFace(GL_CCW);
+        
+        q3bsp_shader.init("assets/shaders/q3bsp_world.glsl");
+        q3bsp_shader.bind();
+        glUniform1i(glGetUniformLocation(q3bsp_shader.program, "s_bspTexture"), 0);
+        glUniform1i(glGetUniformLocation(q3bsp_shader.program, "s_bspLightmap"), 1);
+        q3bsp_shader.unbind();
+        
+        studio_shader.init("assets/shaders/goldsrc_skinned.glsl");
     }
     
     handle_t makeTexture(int width, int height, bool hasAlpha, bool standard, const void* data)
@@ -117,13 +128,13 @@ namespace RenderDevice {
     
     void submit(RenderCommand cmd)
     {
-        if (cmd.isOpaque)
+        if (cmd.blendMode == BlendMode::Transparent || cmd.blendMode == BlendMode::Add)
         {
-            opaquePass.push_back(cmd);
+            transparentPass.push_back(cmd);
         }
         else
         {
-            transparentPass.push_back(cmd);
+            opaquePass.push_back(cmd);
         }
     }
     
@@ -137,40 +148,63 @@ namespace RenderDevice {
         
         for (auto cmd : commands)
         {
-            if (lastProgram != cmd.shader->program)
+            Shader* shader;
+            
+            switch (cmd.pipeline)
             {
-                cmd.shader->bind();
-                lastProgram = cmd.shader->program;
+                
+                case PipelineType::World:
+                    shader = &q3bsp_shader;
+                    break;
+                    
+                case PipelineType::Skinned:
+                    shader = &studio_shader;
+                    
+                    break;
+            }
+            
+            if (lastProgram != shader->program)
+            {
+                shader->bind();
+                lastProgram = shader->program;
             }
             
             glm::mat4 mvp = viewProj * cmd.transform;
-            cmd.shader->setUniform("MVP", mvp);
+            shader->setUniform("MVP", mvp);
             
-            if (cmd.isOpaque)
+            switch (cmd.blendMode)
             {
-                glEnable(GL_CULL_FACE);
-                glCullFace(GL_FRONT);
-                
-                glDisable(GL_BLEND);
-                
-                glDisable(GL_POLYGON_OFFSET_FILL);
-                
-//                glDepthMask(GL_TRUE);
+                case BlendMode::Opaque:
+                    glEnable(GL_CULL_FACE);
+                    glDisable(GL_BLEND);
+                    glDisable(GL_POLYGON_OFFSET_FILL);
+                    break;
+                    
+                case BlendMode::Mask:
+                    glDisable(GL_CULL_FACE);
+                    glDisable(GL_BLEND);
+                    glDisable(GL_POLYGON_OFFSET_FILL);
+//                    glEnable(GL_POLYGON_OFFSET_FILL);
+//                    glPolygonOffset(cmd.lightmapTexture == 0 ? -16 : -8, 1);
+                    break;
+                    
+                case BlendMode::Add:
+                    glDisable(GL_CULL_FACE);
+                    glEnable(GL_BLEND);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE);
+                    glEnable(GL_POLYGON_OFFSET_FILL);
+                    glPolygonOffset(cmd.lightmapTexture == 0 ? -16 : -8, 1);
+                    break;
+                    
+                case BlendMode::Transparent:
+                    glDisable(GL_CULL_FACE);
+                    glEnable(GL_BLEND);
+                    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                    glEnable(GL_POLYGON_OFFSET_FILL);
+                    glPolygonOffset(cmd.lightmapTexture == 0 ? -16 : -8, 1);
+                    break;
             }
-            else
-            {
-                glDisable(GL_CULL_FACE);
-                
-                glEnable(GL_BLEND);
-                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-                
-                glEnable(GL_POLYGON_OFFSET_FILL);
-                
-                float factor = cmd.lightmapTexture == 0 ? -16 : -8;
-                glPolygonOffset(factor, 1);
-                
-//                glDepthMask(GL_FALSE);
-            }
+            
             
             if (lastBaseTexture != cmd.baseTexture)
             {
@@ -188,20 +222,26 @@ namespace RenderDevice {
                 lastLightmapTexture = cmd.lightmapTexture;
             }
             
-            if (cmd.useLightProbe)
+            if (cmd.pipeline == PipelineType::World)
             {
-                cmd.shader->setUniform("u_ambient", cmd.lightProbe.ambient);
-                cmd.shader->setUniform("u_color", cmd.lightProbe.color);
-                cmd.shader->setUniform("u_dir", cmd.lightProbe.dir);
+                float cutoff = cmd.blendMode == BlendMode::Mask ? 0.5 : 0.0;
+                shader->setUniform("u_AlphaCutoff", cutoff);
                 
-                // Model matrix uses for rotate normals
-                cmd.shader->setUniform("uModel", cmd.transform);
+                shader->setUniform("u_hasLightmap", cmd.lightmapTexture > 0);
             }
             
-            if (cmd.useSkinning && cmd.bones)
+            if (cmd.pipeline == PipelineType::Skinned)
             {
-                cmd.shader->setUniform("uBoneTransforms", *cmd.bones);
+                shader->setUniform("u_ambient", cmd.lightProbe.ambient);
+                shader->setUniform("u_color", cmd.lightProbe.color);
+                shader->setUniform("u_dir", cmd.lightProbe.dir);
+                
+                // Model matrix uses for rotate normals
+                shader->setUniform("uModel", cmd.transform);
+                
+                shader->setUniform("uBoneTransforms", *cmd.bones);
             }
+            
             
             if (lastVAO != cmd.vao)
             {
@@ -211,9 +251,6 @@ namespace RenderDevice {
             
             glDrawElements(GL_TRIANGLES, cmd.count, GL_UNSIGNED_INT, (void *)cmd.bufferOffset);
         }
-        
-//        glDisable(GL_BLEND);
-//        glDisable(GL_POLYGON_OFFSET_FILL);
     }
     
     void commit(Camera* camera)
@@ -221,18 +258,23 @@ namespace RenderDevice {
         if (camera == nullptr) return;
         
         glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
+        
+        glCullFace(GL_FRONT);
         
         glClearColor(0.1, 0.1, 0.1, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
         glm::mat4x4 viewProj = camera->projection * camera->view;
         
-//        glDepthMask(GL_TRUE);
+        glDepthMask(GL_TRUE);
         draw(viewProj, opaquePass);
         opaquePass.clear();
         
-//        glDepthMask(GL_FALSE);
+        glDepthMask(GL_FALSE);
         draw(viewProj, transparentPass);
         transparentPass.clear();
+        
+        glDepthMask(GL_TRUE);
     }
 }

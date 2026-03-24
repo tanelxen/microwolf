@@ -33,8 +33,6 @@
 #define FACE_FX 4
 
 static Q3BSPAsset* g_bsp = nullptr;
-static Shader lm_shader;
-static Shader vl_shader;
 
 static void adjastLightmapCoords(Q3BSPAsset* bsp, const TextureAtlas& atlas);
 
@@ -133,9 +131,9 @@ void Q3BspMesh::GenerateTexture()
         m_textures[i].baseTextureId = missing_id;
 
         std::string mapParam = g_bsp->m_textures[i].strName;
-        bool transparent = false;
+        BlendMode blendMode = BlendMode::Opaque;
         
-        s_q3shaders.getBaseTextureName(g_bsp->m_textures[i].strName, mapParam, transparent);
+        s_q3shaders.getBaseTextureName(g_bsp->m_textures[i].strName, mapParam, blendMode);
         
         Image image = loadImage(mapParam);
         
@@ -144,7 +142,7 @@ void Q3BspMesh::GenerateTexture()
             bool hasAlpha = image.num_channels == 4;
             
             m_textures[i].baseTextureId = RenderDevice::makeTexture(image.width, image.height, hasAlpha, true, image.data);
-            m_textures[i].isTransparent = transparent;
+            m_textures[i].blendMode = blendMode;
         }
         
         stbi_image_free(image.data);
@@ -167,33 +165,23 @@ void Q3BspMesh::initBuffers()
     layout.add<byte>(4);
     
     vao = RenderDevice::makeVertexArray(vbo, ibo, layout);
-    
-    lm_shader.init("assets/shaders/q3bsp_lightmapped.glsl");
-    lm_shader.bind();
-    glUniform1i(glGetUniformLocation(lm_shader.program, "s_bspTexture"), 0);
-    glUniform1i(glGetUniformLocation(lm_shader.program, "s_bspLightmap"), 1);
-    lm_shader.unbind();
-    
-    vl_shader.init("assets/shaders/q3bsp_vtxlit.glsl");
-    vl_shader.bind();
-    glUniform1i(glGetUniformLocation(vl_shader.program, "s_bspTexture"), 0);
-    vl_shader.unbind();
 }
 
 void Q3BspMesh::renderFaces()
 {
-    for (auto surface : lm_surfaces_opaque)
+    for (auto surface : lm_surfaces)
     {
+        auto& material = m_textures[surface.textureNum];
+        
         RenderCommand cmd = {
             .vao = vao,
-            .ibo = ibo,
             .bufferOffset = surface.bufferOffset,
             .count = surface.numVerts,
-            
-            .shader = &lm_shader,
-            .baseTexture = surface.texId,
+    
+            .pipeline = PipelineType::World,
+            .baseTexture = material.baseTextureId,
             .lightmapTexture = m_lightmap,
-            .isOpaque = true,
+            .blendMode = material.blendMode,
             
             .passFlags = MainPass
         };
@@ -201,56 +189,18 @@ void Q3BspMesh::renderFaces()
         RenderDevice::submit(cmd);
     }
     
-    for (auto surface : vl_surfaces_opaque)
+    for (auto surface : vl_surfaces)
     {
-        RenderCommand cmd = {
-            .vao = vao,
-            .ibo = ibo,
-            .bufferOffset = surface.bufferOffset,
-            .count = surface.numVerts,
-            
-            .shader = &vl_shader,
-            .baseTexture = surface.texId,
-            .lightmapTexture = 0,
-            .isOpaque = true,
-            
-            .passFlags = MainPass
-        };
+        auto& material = m_textures[surface.textureNum];
         
-        RenderDevice::submit(cmd);
-    }
-    
-    for (auto surface : lm_surfaces_alpha)
-    {
         RenderCommand cmd = {
             .vao = vao,
-            .ibo = ibo,
             .bufferOffset = surface.bufferOffset,
             .count = surface.numVerts,
             
-            .shader = &lm_shader,
-            .baseTexture = surface.texId,
-            .lightmapTexture = m_lightmap,
-            .isOpaque = false,
-            
-            .passFlags = MainPass
-        };
-        
-        RenderDevice::submit(cmd);
-    }
-    
-    for (auto surface : vl_surfaces_alpha)
-    {
-        RenderCommand cmd = {
-            .vao = vao,
-            .ibo = ibo,
-            .bufferOffset = surface.bufferOffset,
-            .count = surface.numVerts,
-            
-            .shader = &vl_shader,
-            .baseTexture = surface.texId,
-            .lightmapTexture = 0,
-            .isOpaque = false,
+            .pipeline = PipelineType::World,
+            .baseTexture = material.baseTextureId,
+            .blendMode = material.blendMode,
             
             .passFlags = MainPass
         };
@@ -280,12 +230,11 @@ void Q3BspMesh::makeLightmappedIndices()
     for (auto pair : indicesByTexture)
     {
         int texture = pair.first;
-        auto& array = m_textures[texture].isTransparent ? lm_surfaces_alpha : lm_surfaces_opaque;
         
-        auto& surface = array.emplace_back();
-        surface.texId = m_textures[texture].baseTextureId;
+        auto& surface = lm_surfaces.emplace_back();
         surface.bufferOffset = (uint32_t)(indices.size() * sizeof(uint32_t));
         surface.numVerts = (uint32_t)pair.second.size();
+        surface.textureNum = texture;
         
         indices.insert(indices.end(), pair.second.begin(), pair.second.end());
     }
@@ -315,24 +264,14 @@ void Q3BspMesh::makeVertexlitIndices()
     {
         int texture = pair.first;
         
-//        const char* str = g_bsp->m_textures[texture].strName;
-//        auto name = std::string(str);
-        
         int flags = g_bsp->m_textures[texture].flags;
         
         if (flags & SURFACE_SKY) continue;
         
-//        if (name.find("skies/sky_") != std::string::npos)
-//        {
-//            continue;
-//        }
-        
-        auto& array = m_textures[texture].isTransparent ? vl_surfaces_alpha : vl_surfaces_opaque;
-        
-        auto& surface = array.emplace_back();
-        surface.texId = m_textures[texture].baseTextureId;
+        auto& surface = vl_surfaces.emplace_back();
         surface.bufferOffset = (uint32_t)(indices.size() * sizeof(uint32_t));
         surface.numVerts = (uint32_t)pair.second.size();
+        surface.textureNum = texture;
         
         indices.insert(indices.end(), pair.second.begin(), pair.second.end());
     }

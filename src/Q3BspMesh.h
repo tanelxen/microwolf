@@ -10,19 +10,23 @@
 #include <vector>
 #include <glm/glm.hpp>
 
+#include "RenderDevice.h"
+
 #define MAX_TEXTURES 1000
 
-struct Surface
-{
-    unsigned int texId;
-    unsigned int bufferOffset; // offset in bytes
-    unsigned int numVerts;
-};
 
 struct Material
 {
     unsigned int baseTextureId;
-    bool isTransparent;
+    BlendMode blendMode = BlendMode::Opaque;
+};
+
+struct Surface
+{
+    unsigned int textureNum;
+
+    unsigned int bufferOffset; // offset in bytes
+    unsigned int numVerts;
 };
 
 class Q3BSPAsset;
@@ -51,9 +55,6 @@ private:
     
     std::vector<unsigned int> indices;
     
-    std::vector<Surface> lm_surfaces_opaque;
-    std::vector<Surface> lm_surfaces_alpha;
-    
-    std::vector<Surface> vl_surfaces_opaque;
-    std::vector<Surface> vl_surfaces_alpha;
+    std::vector<Surface> lm_surfaces;
+    std::vector<Surface> vl_surfaces;
 };

@@ -54,7 +54,7 @@ void Quake3Shaders::readFile(const std::string& filename)
     }
 }
 
-bool Quake3Shaders::getBaseTextureName(const std::string& shaderName, std::string& textureName, bool& transparent) const
+bool Quake3Shaders::getBaseTextureName(const std::string& shaderName, std::string& textureName, BlendMode& mode) const
 {
     auto it = entries.find(shaderName);
     
@@ -70,26 +70,33 @@ bool Quake3Shaders::getBaseTextureName(const std::string& shaderName, std::strin
     
     for (const auto& stage : shader.stages)
     {
-        auto it = stage.parameters.find("map");
+        auto it = stage.parameters.find("map"); 
         
         if (it == stage.parameters.end()) continue;
         if (it->second == "$lightmap") continue;
         
         textureName = it->second;
         
-        auto it2 = stage.parameters.find("blendFunc");
-        if (it2 != stage.parameters.end())
+        mode = BlendMode::Opaque;
+        
+        auto blendFunc = stage.parameters.find("blendFunc");
+        if (blendFunc != stage.parameters.end())
         {
-            bool multiply = it2->second == "GL_SRC_ALPHA GL_ONE";
-            bool add = it2->second == "GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA";
+            if (blendFunc->second == "GL_SRC_ALPHA GL_ONE_MINUS_SRC_ALPHA")
+            {
+                mode = BlendMode::Transparent;
+            }
+            else if (blendFunc->second == "GL_SRC_ALPHA GL_ONE")
+            {
+                mode = BlendMode::Add;
+            }
             
-            transparent = multiply || add;
         }
         
-        auto it3 = stage.parameters.find("alphaFunc");
-        if (it3 != stage.parameters.end())
+        auto alphaFunc = stage.parameters.find("alphaFunc");
+        if (alphaFunc != stage.parameters.end())
         {
-            transparent |= it3->second == "GE128";
+            mode = BlendMode::Mask;
         }
         
         success = true;

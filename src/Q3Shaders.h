@@ -11,6 +11,8 @@
 #include <vector>
 #include <unordered_map>
 
+#include "RenderDevice.h"
+
 struct Q3ShaderStage
 {
     std::unordered_map<std::string, std::string> parameters;
@@ -53,7 +55,7 @@ class Quake3Shaders
 public:
     void initFromDir(const std::string& dir);
     
-    bool getBaseTextureName(const std::string& shaderName, std::string& textureName, bool& transparent) const;
+    bool getBaseTextureName(const std::string& shaderName, std::string& textureName, BlendMode& mode) const;
     
 private:
     void readFile(const std::string& filename);

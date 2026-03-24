@@ -217,6 +217,32 @@ void Shader::setUniform(const std::string &name, const std::vector<glm::mat4> &m
     glUniformMatrix4fv(location, (GLsizei)(matrices.size()), GL_FALSE, &(matrices[0][0][0]));
 }
 
+void Shader::setUniform(const std::string &name, bool value) const
+{
+    const GLint location = glGetUniformLocation(program, name.c_str());
+    
+    if (location == -1)
+    {
+        printf("Shader have no uniform %s\n", name.c_str());
+        return;
+    }
+    
+    glUniform1i(location, value);
+}
+
+void Shader::setUniform(const std::string &name, float value) const
+{
+    const GLint location = glGetUniformLocation(program, name.c_str());
+    
+    if (location == -1)
+    {
+        printf("Shader have no uniform %s\n", name.c_str());
+        return;
+    }
+    
+    glUniform1f(location, value);
+}
+
 
 unsigned int compile_shader(unsigned int type, const char* source)
 {

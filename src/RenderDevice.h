@@ -45,6 +45,16 @@ enum PassType
     UserInterfacePass   = 1 << 1,
 };
 
+enum class BlendMode
+{
+    Opaque, Mask, Add, Transparent
+};
+
+enum class PipelineType
+{
+    World, Skinned
+};
+
 struct RenderCommand
 {
     // Mesh
@@ -54,19 +64,17 @@ struct RenderCommand
     unsigned int count;
     
     // Material
-    class Shader *shader;
+    PipelineType pipeline;
     RenderDevice::handle_t baseTexture;
     RenderDevice::handle_t lightmapTexture = 0;
-    bool isOpaque = true;
+    BlendMode blendMode = BlendMode::Opaque;
     
     // Object
     glm::mat4 transform = glm::mat4(1);
     
     LightProbe lightProbe;
-    bool useLightProbe = false;
     
     std::vector<glm::mat4>* bones;
-    bool useSkinning = false;
     
     uint32_t passFlags = 0;
 };
